@@ -13,7 +13,6 @@ import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 
-
 @Throws(NoSuchAlgorithmException::class, KeyManagementException::class)
 fun setSSL() {
     val trustAllCerts = arrayOf<TrustManager>(
@@ -40,23 +39,33 @@ fun setSSL() {
     HttpsURLConnection.setDefaultSSLSocketFactory(sc.socketFactory)
 }
 
-class QueryClien {
-    fun requestNotice(): Single<List<Any>> {
+class QueryEngine {
+    var boardNameMap = mapOf<String, String>(
+        "모두의공원" to "https://m.clien.net/service/board/park",
+        "새로운소식" to "https://m.clien.net/service/board/news",
+        "알뜰구매" to "https://m.clien.net/service/board/jirum"
+    )
+
+    val MAIN_SELECTOR: String
+        get() = "body > div.nav_container > div.content_list > a:nth-child(n)"
+
+    val TITLE_SELECTOR: String
+        get() = "div.list_title > div.list_subject > span:nth-child(2)"
+
+    fun queryBoard(title: String = "모두의공원"): Single<List<Any>> {
+        var url = boardNameMap[title]
         return Single.fromObservable(Observable.create {
             val bachNoticeList: ArrayList<Any> = ArrayList()
             setSSL()
-            val doc: Document = Jsoup.connect("https://m.clien.net/service/board/park").userAgent("Mozilla").get()
-
-
-//            val contentElements: Elements = doc.select("body > div.nav_container > div.content_list > a:nth-child(n) > div.list_title > div.list_subject > span:nth-child(2)") // title, link
-            val contentElements: Elements = doc.select("body > div.nav_container > div.content_list > a:nth-child(n)") // title, link
-
-//            val idElements: String = doc.select("body > div.nav_container > div.content_list > a:nth-child(n)").attr("data-board-sn")// id값
+            val doc: Document = Jsoup.connect(url).userAgent("Mozilla").get()
+            val contentElements: Elements = doc.select(MAIN_SELECTOR) // title, link
             for ((i, elem) in contentElements.withIndex()) {
-                var title = elem.select("div.list_title > div.list_subject > span:nth-child(2)").text()
-                var id = elem.attr("data-board-sn")
-                var link = elem.attr("href")
-                println("-> ${title}, ${id},${link}")
+                val id = elem.attr("data-board-sn")
+                val title = elem.select(TITLE_SELECTOR).text()
+                val author = elem.attr("data-author-id")
+                val comment_cnt = elem.attr("data-comment-count")
+                val link = elem.attr("href")
+//                println("-> ${title}, ${id},${link}")
                 bachNoticeList.add(title)
                 bachNoticeList.add(id)
                 bachNoticeList.add(link)
