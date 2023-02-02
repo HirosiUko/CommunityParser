@@ -1,7 +1,7 @@
 import io.reactivex.rxjava3.disposables.Disposable
 
 fun main(args: Array<String>) {
-    var t = QueryEngine().queryBoard()
+    var t = QueryEngine().queryArticle()
     var subscribe = t.subscribe(
         /* onSuccess = */
         fun(it: List<Any>) {

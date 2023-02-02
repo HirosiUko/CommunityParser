@@ -40,22 +40,22 @@ fun setSSL() {
 }
 
 class QueryEngine {
-    var boardNameMap = mapOf<String, String>(
+    private val boardNameMap = mapOf<String, String>(
         "모두의공원" to "https://m.clien.net/service/board/park",
         "새로운소식" to "https://m.clien.net/service/board/news",
         "알뜰구매" to "https://m.clien.net/service/board/jirum"
     )
 
-    val MAIN_SELECTOR: String
+    private val MAIN_SELECTOR: String
         get() = "body > div.nav_container > div.content_list > a:nth-child(n)"
 
-    val TITLE_SELECTOR: String
+    private val TITLE_SELECTOR: String
         get() = "div.list_title > div.list_subject > span:nth-child(2)"
 
     fun queryBoard(title: String = "모두의공원"): Single<List<Any>> {
         var url = boardNameMap[title]
         return Single.fromObservable(Observable.create {
-            val bachNoticeList: ArrayList<Any> = ArrayList()
+            val BoardList: ArrayList<Any> = ArrayList()
             setSSL()
             val doc: Document = Jsoup.connect(url).userAgent("Mozilla").get()
             val contentElements: Elements = doc.select(MAIN_SELECTOR) // title, link
@@ -63,14 +63,44 @@ class QueryEngine {
                 val id = elem.attr("data-board-sn")
                 val title = elem.select(TITLE_SELECTOR).text()
                 val author = elem.attr("data-author-id")
-                val comment_cnt = elem.attr("data-comment-count")
+                val commentCnt = elem.attr("data-comment-count")
                 val link = elem.attr("href")
-//                println("-> ${title}, ${id},${link}")
-                bachNoticeList.add(title)
-                bachNoticeList.add(id)
-                bachNoticeList.add(link)
+                println("-> ${id}, ${title}, ${author}, ${commentCnt}, https://m.clien.net$link")
+                if(id.isNotEmpty()) BoardList += mapOf<String,String>(
+                    "id" to id,
+                    "author" to author,
+                    "title" to title,
+                    "commentCnt" to commentCnt,
+                    "link" to link
+                )
             }
-            it.onNext(bachNoticeList)
+            it.onNext(BoardList)
+            it.onComplete()
+        })
+    }
+
+    fun queryArticle(url: String = "https://m.clien.net/service/board/news/17884635?od=T31&po=0&category=0&groupCd="): Single<List<Any>> {
+        return Single.fromObservable(Observable.create {
+            val BoardList: ArrayList<Any> = ArrayList()
+            setSSL()
+            val doc: Document = Jsoup.connect(url).userAgent("Mozilla").get()
+            val contentElements: Elements = doc.select("body > div.nav_container > div.content_view > div.post_view > div.post_content > article") // title, link
+//            for ((i, elem) in contentElements.withIndex()) {
+//                val id = elem.attr("data-board-sn")
+//                val title = elem.select(TITLE_SELECTOR).text()
+//                val author = elem.attr("data-author-id")
+//                val commentCnt = elem.attr("data-comment-count")
+//                val link = elem.attr("href")
+//                println("-> ${id}, ${title}, ${author}, ${commentCnt}, https://www.clien.net$link")
+//                if(id.isNotEmpty()) BoardList += mapOf<String,String>(
+//                    "id" to id,
+//                    "author" to author,
+//                    "title" to title,
+//                    "commentCnt" to commentCnt,
+//                    "link" to link
+//                )
+//            }
+            it.onNext(BoardList)
             it.onComplete()
         })
     }
