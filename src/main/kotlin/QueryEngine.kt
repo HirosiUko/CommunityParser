@@ -17,20 +17,17 @@ import javax.net.ssl.X509TrustManager
 fun setSSL() {
     val trustAllCerts = arrayOf<TrustManager>(
         object : X509TrustManager {
-            override fun getAcceptedIssuers(): Array<X509Certificate>? {
-                // TODO Auto-generated method stub
-                return null
+            @Throws(CertificateException::class)
+            override fun checkClientTrusted(chain: Array<X509Certificate>?, authType: String?) {
+                chain?.forEach { it.checkValidity() }
             }
 
             @Throws(CertificateException::class)
-            override fun checkClientTrusted(chain: Array<X509Certificate?>?, authType: String?) {
-                // TODO Auto-generated method stub
+            override fun checkServerTrusted(chain: Array<X509Certificate>?, authType: String?) {
+                chain?.forEach { it.checkValidity() }
             }
 
-            @Throws(CertificateException::class)
-            override fun checkServerTrusted(chain: Array<X509Certificate?>?, authType: String?) {
-                // TODO Auto-generated method stub
-            }
+            override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
         }
     )
     val sc = SSLContext.getInstance("SSL")
@@ -40,12 +37,6 @@ fun setSSL() {
 }
 
 class QueryEngine {
-    private val boardNameMap = mapOf(
-        "모두의공원" to "https://m.clien.net/service/board/park",
-        "새로운소식" to "https://m.clien.net/service/board/news",
-        "알뜰구매" to "https://m.clien.net/service/board/jirum"
-    )
-
     private val TEST_ARTICLE_URL = "https://m.clien.net/service/board/news/17884635?od=T31&po=0&category=0&groupCd="
 
     // Board Const Variable
@@ -56,6 +47,12 @@ class QueryEngine {
     private val COMMENT_CNT_ATTR = "data-comment-count"
     private val LINK_ATTR = "href"
     private val SITE_PREFIX = "https://m.clien.net"
+
+    private val boardNameMap = mapOf(
+        "모두의공원" to "$SITE_PREFIX/service/board/park",
+        "새로운소식" to "$SITE_PREFIX/service/board/news",
+        "알뜰구매" to "$SITE_PREFIX/service/board/jirum"
+    )
 
     // Article Const Variable
     private val ARTICLE_TITLE_SELECTOR = "body > div.nav_container > div.content_view > div.post_title > div > span"
@@ -73,78 +70,76 @@ class QueryEngine {
     private val COMMENT_DATETIME_SELECTOR = "#time > span"
     private val COMMENT_TEXT_SELECTOR = "div.comment_content > div"
 
-    fun queryBoard(title: String = "모두의공원"): Single<List<Any>> {
+    fun queryBoard(title: String = "모두의공원"): Single<ArrayList<Any>> {
         val url = boardNameMap[title]
-        return Single.fromObservable(Observable.create {
-            val boardList: ArrayList<Any> = ArrayList()
+        return Single.fromCallable {
             setSSL()
-            val doc: Document = Jsoup.connect(url).userAgent("Mozilla").get()
-            val contentElements: Elements = doc.select(MAIN_SELECTOR) // title, link
-            for (elem in contentElements) {
-                val id = elem.attr(ID_ATTR)
-                val title = elem.select(TITLE_SELECTOR).text()
-                val author = elem.attr(AUTHOR_ATTR)
-                val commentCnt = elem.attr(COMMENT_CNT_ATTR)
-                val link = elem.attr(LINK_ATTR)
-//                println("-> ${id}, ${title}, ${author}, ${commentCnt}, ${SITE_PREFIX + link}")
-                if (id.isNotEmpty()) boardList += mapOf<String, String>(
-                    "id" to id,
-                    "author" to author,
-                    "title" to title,
-                    "commentCnt" to commentCnt,
-                    "link" to SITE_PREFIX + link
-                )
+            val boardList: ArrayList<Any> = ArrayList()
+            try {
+                val doc: Document = Jsoup.connect(url).userAgent("Mozilla").get()
+                val contentElements: Elements = doc.select(MAIN_SELECTOR)
+                for (elem in contentElements) {
+                    val id = elem.attr(ID_ATTR)
+                    if (id.isNullOrEmpty()) continue
+                    val title = elem.select(TITLE_SELECTOR).text()
+                    val author = elem.attr(AUTHOR_ATTR)
+                    val commentCnt = elem.attr(COMMENT_CNT_ATTR)
+                    val link = SITE_PREFIX + elem.attr(LINK_ATTR)
+                    boardList.add(Board(id, title, author, commentCnt, link))
+                }
+            }catch (e : Exception)
+            {
+                println(e.toString()+"\n"+e.stackTraceToString())
             }
-            it.onNext(boardList)
-            it.onComplete()
-        })
+            boardList
+        }
     }
 
     fun queryArticle(url: String = TEST_ARTICLE_URL): Single<ArrayList<ArticleVo>> {
         return Single.fromObservable(Observable.create {
-
             val articleList: ArrayList<ArticleVo> = ArrayList()
-            setSSL()
-            val doc: Document = Jsoup.connect(url).userAgent("Mozilla").get()
-            val title = doc.select(ARTICLE_TITLE_SELECTOR).text()
-            val articleText: Elements = doc.select(ARTICLE_SELECTOR)
-            val authorNickName = doc.select(AUTHOR_NICKNAME_SELECTOR).text()
-            val articleDateTime = doc.select(ARTICLE_CREATE_TIME_SELECTOR).text()
-            val articleViewCount = doc.select(ARTICLE_VIEW_COUNTER_SELECTOR).text()
-            val articleFavoriteCount = doc.select(ARTICLE_FAVORITE_COUNTER_SELECTOR).text()
 
-//            println("${title}")
-//            println("${articleText}")
-//            println("${authorNickName}, ${articleDateTime}, ${articleViewCount}, ${articleFavoritCount}")
-            val article = ArticleVo(
-                articleTitle = title,
-                articleText = articleText.toString(),
-                authorNickName = authorNickName,
-                articleDateTime = articleDateTime,
-                articleViewCount = articleViewCount,
-                articleFavoriteCount = articleFavoriteCount
-            )
+            try {
+                val doc: Document = Jsoup.connect(url).userAgent("Mozilla").get()
+                val title = doc.select(ARTICLE_TITLE_SELECTOR).text()
+                val articleText: Elements = doc.select(ARTICLE_SELECTOR)
+                val authorNickName = doc.select(AUTHOR_NICKNAME_SELECTOR).text()
+                val articleDateTime = doc.select(ARTICLE_CREATE_TIME_SELECTOR).text()
+                val articleViewCount = doc.select(ARTICLE_VIEW_COUNTER_SELECTOR).text()
+                val articleFavoriteCount = doc.select(ARTICLE_FAVORITE_COUNTER_SELECTOR).text()
 
-            val commentElements: Elements = doc.select(COMMENTS_SELECTOR)
-            for (commentElement in commentElements) {
-                var commentAuthor = commentElement.select(COMMENT_AUTHOR_SELECTOR).text()
-                if (commentAuthor.isEmpty()) {
-                    commentAuthor = commentElement.select(COMMENT_AUTHOR_ALT_SELECTOR).attr("alt")
+                val article = ArticleVo(
+                    articleTitle = title,
+                    articleText = articleText.toString(),
+                    authorNickName = authorNickName,
+                    articleDateTime = articleDateTime,
+                    articleViewCount = articleViewCount,
+                    articleFavoriteCount = articleFavoriteCount
+                )
+
+                val commentElements: Elements = doc.select(COMMENTS_SELECTOR)
+                for (commentElement in commentElements) {
+                    var commentAuthor = commentElement.select(COMMENT_AUTHOR_SELECTOR).text()
+                    if (!commentAuthor.isNullOrEmpty()) {
+                        commentAuthor = commentElement.select(COMMENT_AUTHOR_ALT_SELECTOR).attr("alt")
+                    }
+                    val commentDateTime = commentElement.select(COMMENT_DATETIME_SELECTOR).text()
+                    var commentText = commentElement.select(COMMENT_TEXT_SELECTOR).text()
+                    if (commentElement.attr("class").contains("re")) {
+                        commentText = "reply : $commentText"
+                    }
+                    val comment = CommentVo(commentAuthor, commentDateTime, commentText)
+                    article.comments.add(comment)
                 }
-                val commentDateTime = commentElement.select(COMMENT_DATETIME_SELECTOR).text()
-                var commentText = commentElement.select(COMMENT_TEXT_SELECTOR).text()
-                if (commentElement.attr("class").contains("re")) {
-                    commentText = "reply : $commentText"
-                }
-//                println("${commentDateTime}, [${commentAuthor}], ${commentText}")
-
-                val comment = CommentVo(commentAuthor, commentDateTime, commentText)
-                article.comments.add(comment)
+                articleList.add(article)
+            }catch (e: Exception)
+            {
+                println(e.toString()+"\n"+e.stackTraceToString())
             }
-            articleList.add(article)
-
             it.onNext(articleList)
             it.onComplete()
         })
     }
 }
+
+

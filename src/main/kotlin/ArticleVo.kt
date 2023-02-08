@@ -9,12 +9,16 @@ class ArticleVo (
     var comments = mutableListOf<CommentVo>()
 
     override fun toString(): String {
-        return "$articleTitle, $articleText, $authorNickName, $articleDateTime, $articleViewCount, $articleFavoriteCount \n $comments"
+        return "title: $articleTitle,\n text: $articleText,\n NickName:$authorNickName,\n DateTime: $articleDateTime,\n ViewCount: $articleViewCount,\n FavoriteCount: $articleFavoriteCount \n $comments"
     }
 }
 
 class CommentVo (val commentAuthor: String, val commentDateTime: String, val commentText: String) {
     override fun toString(): String {
-        return "$commentAuthor, $commentDateTime, $commentText"
+        return "<< $commentAuthor, $commentDateTime, $commentText >>\n"
     }
+}
+
+class Board(val id: String, val title: String, val author: String, val commentCnt: String, val link: String) {
+    override fun toString(): String = "$id, $title, $author, $commentCnt, $link"
 }
